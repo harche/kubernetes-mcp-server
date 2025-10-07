@@ -213,3 +213,8 @@ func (k *Kubernetes) NewHelm() *helm.Helm {
 	// This is a derived Kubernetes, so it already has the Helm initialized
 	return helm.NewHelm(k.manager)
 }
+
+// ToRESTConfig returns the rest.Config for creating custom clients
+func (k *Kubernetes) ToRESTConfig() (*rest.Config, error) {
+	return k.manager.ToRESTConfig()
+}
