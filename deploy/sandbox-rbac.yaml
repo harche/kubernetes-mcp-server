@@ -1,0 +1,69 @@
+# Example RBAC configuration for the shell sandbox.
+#
+# Prerequisites:
+#   - agent-sandbox CRDs and controller must be installed on the cluster:
+#     export VERSION="v0.1.1"
+#     kubectl apply -f https://github.com/kubernetes-sigs/agent-sandbox/releases/download/${VERSION}/manifest.yaml
+#
+# The MCP server's ServiceAccount needs permissions to manage Sandbox CRs.
+# The sandbox pod's ServiceAccount needs permissions to run kubectl commands against the cluster.
+# Adjust the rules below based on your security requirements.
+#
+# Apply with: kubectl apply -f deploy/sandbox-rbac.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sandbox-shell
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: sandbox-shell
+rules:
+  - apiGroups: [""]
+    resources: [pods, pods/log, services, configmaps, namespaces, nodes, events, endpoints, persistentvolumeclaims]
+    verbs: [get, list, watch]
+  - apiGroups: ["apps"]
+    resources: [deployments, daemonsets, replicasets, statefulsets]
+    verbs: [get, list, watch]
+  - apiGroups: ["batch"]
+    resources: [jobs, cronjobs]
+    verbs: [get, list, watch]
+  - apiGroups: ["networking.k8s.io"]
+    resources: [ingresses, networkpolicies]
+    verbs: [get, list, watch]
+  - apiGroups: ["storage.k8s.io"]
+    resources: [storageclasses, volumeattachments]
+    verbs: [get, list, watch]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: [roles, rolebindings, clusterroles, clusterrolebindings]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: sandbox-shell
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: sandbox-shell
+subjects:
+  - kind: ServiceAccount
+    name: sandbox-shell
+    namespace: default
+---
+# RBAC for the MCP server's own ServiceAccount (when deployed in-cluster).
+# The MCP server needs permissions to manage Sandbox CRs, pods, and ServiceAccounts.
+# When running locally, the user's kubeconfig provides these permissions.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubernetes-mcp-server-sandbox
+rules:
+  - apiGroups: ["agents.x-k8s.io"]
+    resources: [sandboxes]
+    verbs: [create, get, list, delete, patch]
+  - apiGroups: [""]
+    resources: [pods, pods/exec, serviceaccounts]
+    verbs: [create, get, list, delete]

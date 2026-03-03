@@ -89,6 +89,15 @@ update-readme-tools: ## Update the README.md and docs/configuration.md files wit
 	go run ./internal/tools/update-readme/main.go README.md
 	go run ./internal/tools/update-readme/main.go docs/configuration.md
 
+##@ Sandbox
+
+SANDBOX_IMAGE ?= kube-shell-sandbox
+SANDBOX_TAG ?= latest
+
+.PHONY: sandbox-image
+sandbox-image: ## Build the sandbox container image
+	docker build -t $(SANDBOX_IMAGE):$(SANDBOX_TAG) images/sandbox
+
 ##@ Local Development
 
 .PHONY: local-env-setup

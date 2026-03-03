@@ -1,0 +1,41 @@
+# Sample Sandbox CR for the kubernetes-mcp-server shell sandbox.
+# The MCP server creates this automatically, but you can apply it manually for testing
+# or use it as a reference for customization.
+#
+# Prerequisites:
+#   - agent-sandbox CRDs and controller installed (see sandbox-rbac.yaml)
+#   - ServiceAccount and RBAC applied (kubectl apply -f deploy/sandbox-rbac.yaml)
+#   - Container image available on the cluster (build from images/sandbox/Dockerfile
+#     or replace with your own image)
+#
+# Apply with: kubectl apply -f deploy/sandbox.yaml
+apiVersion: agents.x-k8s.io/v1alpha1
+kind: Sandbox
+metadata:
+  name: kubernetes-mcp-server-sandbox
+  labels:
+    app.kubernetes.io/component: shell-sandbox
+    app.kubernetes.io/managed-by: kubernetes-mcp-server
+    app.kubernetes.io/part-of: kubernetes-mcp-server-shell-sandbox
+spec:
+  podTemplate:
+    spec:
+      serviceAccountName: sandbox-shell
+      restartPolicy: Never
+      containers:
+        - name: sandbox
+          image: kube-shell-sandbox:latest
+          imagePullPolicy: IfNotPresent
+          command: ["sleep", "infinity"]
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "true"]
+            initialDelaySeconds: 2
+            periodSeconds: 5

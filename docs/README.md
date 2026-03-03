@@ -22,6 +22,7 @@ Choose the guide that matches your needs:
 
 ## Toolset Guides
 
+- **[Sandbox](sandbox.md)** - Shell command execution (local subprocess or remote Kubernetes pod)
 - **[Kiali](KIALI.md)** - Tools for Kiali ServiceMesh with Istio
 - **[KubeVirt](kubevirt.md)** - KubeVirt virtual machine management tools
 

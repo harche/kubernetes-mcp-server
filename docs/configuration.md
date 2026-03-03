@@ -462,6 +462,14 @@ Some toolsets accept additional configuration via the `toolset_configs` map.
 |-------|------|-------------|
 | `toolset_configs` | map | Toolset-specific configuration sections. |
 
+**Example (Sandbox):**
+```toml
+[toolset_configs.sandbox]
+mode = "remote"          # "local" (default) or "remote"
+image = "kube-shell-sandbox:latest"
+namespace = "default"
+```
+
 **Example (Kiali):**
 ```toml
 [toolset_configs.kiali]
@@ -470,6 +478,7 @@ token = "your-kiali-token"
 ```
 
 Refer to individual toolset documentation for available options:
+- [Sandbox Configuration](sandbox.md)
 - [Kiali Configuration](KIALI.md)
 
 ### Cluster Provider Configuration
