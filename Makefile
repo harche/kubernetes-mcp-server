@@ -94,9 +94,15 @@ update-readme-tools: ## Update the README.md and docs/configuration.md files wit
 SANDBOX_IMAGE ?= kube-shell-sandbox
 SANDBOX_TAG ?= latest
 
+.PHONY: build-sandbox-proxy
+build-sandbox-proxy: ## Build the sandbox-proxy binary
+	go build -o sandbox-proxy ./cmd/sandbox-proxy
+
 .PHONY: sandbox-image
-sandbox-image: ## Build the sandbox container image
+sandbox-image: build-sandbox-proxy ## Build the sandbox container image
+	cp sandbox-proxy images/sandbox/sandbox-proxy
 	docker build -t $(SANDBOX_IMAGE):$(SANDBOX_TAG) images/sandbox
+	rm -f images/sandbox/sandbox-proxy
 
 ##@ Local Development
 

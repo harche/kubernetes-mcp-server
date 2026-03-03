@@ -21,6 +21,42 @@ Config (TOML):
 toolsets = ["core", "sandbox"]
 ```
 
+### Cluster-aware authentication
+
+The `sandbox_exec` tool is cluster-aware — it automatically receives credentials for the cluster the AI assistant is targeting. When the assistant specifies a cluster context (e.g., `context="prod"`), the sandbox environment is configured with:
+
+- A kubeconfig pointing to the correct API server
+- The user's authentication token (including tokens from token exchange/SSO)
+- The appropriate CA certificate for TLS
+
+This works with all cluster provider strategies (kubeconfig, in-cluster) and authentication methods (bearer tokens, OAuth token exchange, ACM SSO).
+
+#### Multi-cluster support
+
+In multi-cluster environments, the assistant can target different clusters across consecutive `sandbox_exec` calls. Each call gets fresh credentials for the specified target cluster:
+
+```
+sandbox_exec(context="dev", command="kubectl get pods")     # targets dev cluster
+sandbox_exec(context="prod", command="kubectl get pods")    # targets prod cluster
+```
+
+### Policy enforcement (denied_resources)
+
+When `denied_resources` is configured in the TOML configuration, the sandbox enforces these restrictions using a policy proxy. The proxy runs inside the sandbox environment and intercepts all Kubernetes API traffic (kubectl, curl, or any K8s client):
+
+```toml
+denied_resources = [
+  {group = "", version = "v1", kind = "Secret"},
+  {group = "rbac.authorization.k8s.io", version = "v1", kind = "Role"},
+]
+```
+
+With this configuration:
+- `sandbox_exec(command="kubectl get pods")` — allowed
+- `sandbox_exec(command="kubectl get secrets")` — blocked (403 Forbidden)
+
+The proxy listens on `localhost:9443` inside the sandbox. The kubeconfig automatically points kubectl to the proxy instead of the real API server. The proxy forwards allowed requests to the upstream API server with the user's credentials.
+
 ### Local mode (default)
 
 In local mode, commands are executed as subprocesses via `bash -c` on the host running the MCP server. No Kubernetes resources or additional setup are required.
@@ -96,7 +132,7 @@ Build the sandbox container image using the provided Makefile target:
 make sandbox-image
 ```
 
-This builds an Alpine-based image with: bash, curl, wget, jq, yq, git, kubectl, openssl, and other common CLI tools.
+This builds an Alpine-based image with: bash, curl, wget, jq, yq, git, kubectl, openssl, the sandbox-proxy for policy enforcement, and other common CLI tools.
 
 ### Configuration reference
 
@@ -118,17 +154,19 @@ All configuration options for the sandbox toolset:
 
 #### `sandbox_exec`
 
-Execute a shell command or script in the sandbox environment. Commands are run via `bash -c`, so pipes, redirects, and all shell features work.
+Execute a shell command or script in the sandbox environment. Commands are run via `bash -c`, so pipes, redirects, and all shell features work. The tool is cluster-aware — kubectl and other Kubernetes tools are automatically configured with credentials for the target cluster.
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `command` | string | yes | Shell command or script to execute |
+| `context` | string | no | Target cluster context (auto-added in multi-cluster environments) |
 
 **Example usage by an AI assistant:**
 
 ```
 sandbox_exec(command="kubectl get pods -o json | jq '.items[].metadata.name'")
+sandbox_exec(context="prod", command="kubectl get nodes")
 sandbox_exec(command="echo 'Hello from sandbox'")
 ```

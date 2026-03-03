@@ -27,6 +27,9 @@ RUN apk add --no-cache \
     && chmod +x kubectl \
     && mv kubectl /usr/local/bin/
 
+# Copy the sandbox-proxy binary for denied_resources enforcement
+COPY sandbox-proxy /usr/local/bin/sandbox-proxy
+
 # Create a non-root user for running commands
 RUN adduser -D -s /bin/bash sandbox
 USER sandbox

@@ -10,5 +10,7 @@ type Executor interface {
 	Ensure(ctx context.Context) error
 
 	// Exec runs a shell command and returns the output.
-	Exec(ctx context.Context, command string) (string, error)
+	// If creds is non-nil, a kubeconfig is injected into the environment
+	// before executing the command, enabling kubectl to target the specified cluster.
+	Exec(ctx context.Context, command string, creds *Credentials) (string, error)
 }

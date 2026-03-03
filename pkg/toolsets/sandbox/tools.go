@@ -5,6 +5,8 @@ import (
 	"sync"
 
 	"github.com/google/jsonschema-go/jsonschema"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
 	"github.com/containers/kubernetes-mcp-server/pkg/api"
@@ -42,7 +44,7 @@ func initSandboxTools() []api.ServerTool {
 	return []api.ServerTool{
 		{Tool: api.Tool{
 			Name:        "sandbox_exec",
-			Description: "Execute a shell command or script in a sandbox environment. The command is run via bash -c, so pipes, redirects, and all shell features work. Supports local subprocess execution (default) and remote Kubernetes pod execution. Combine multiple commands into a single shell script to minimize round trips.",
+			Description: "Execute a shell command or script in a sandbox environment. The command is run via bash -c, so pipes, redirects, and all shell features work. Supports local subprocess execution (default) and remote Kubernetes pod execution. kubectl and other Kubernetes tools are automatically configured with credentials for the target cluster. Combine multiple commands into a single shell script to minimize round trips.",
 			InputSchema: &jsonschema.Schema{
 				Type: "object",
 				Properties: map[string]*jsonschema.Schema{
@@ -58,7 +60,7 @@ func initSandboxTools() []api.ServerTool {
 				DestructiveHint: ptr.To(true),
 				OpenWorldHint:   ptr.To(true),
 			},
-		}, Handler: sandboxExec, ClusterAware: ptr.To(false)},
+		}, Handler: sandboxExec},
 	}
 }
 
@@ -77,7 +79,9 @@ func sandboxExec(params api.ToolHandlerParams) (*api.ToolCallResult, error) {
 		return api.NewToolCallResult("", err), nil
 	}
 
-	result, execErr := executor.Exec(params.Context, command)
+	creds := extractCredentials(params)
+
+	result, execErr := executor.Exec(params.Context, command, creds)
 	if execErr != nil {
 		return api.NewToolCallResult("", fmt.Errorf("sandbox exec failed: %w", execErr)), nil
 	}
@@ -85,4 +89,55 @@ func sandboxExec(params api.ToolHandlerParams) (*api.ToolCallResult, error) {
 		result = "Command executed successfully (no output)"
 	}
 	return api.NewToolCallResult(result, nil), nil
+}
+
+// extractCredentials builds a Credentials struct from the KubernetesClient in params,
+// including denied resources converted from GVK to GVR.
+func extractCredentials(params api.ToolHandlerParams) *sandboxcfg.Credentials {
+	if params.KubernetesClient == nil {
+		return nil
+	}
+	restConfig := params.KubernetesClient.RESTConfig()
+	if restConfig == nil {
+		return nil
+	}
+	creds := sandboxcfg.CredentialsFromRESTConfig(restConfig, params.KubernetesClient.NamespaceOrDefault(""))
+
+	// Extract denied resources from config and convert GVK → GVR
+	if drp, ok := params.ExtendedConfigProvider.(api.DeniedResourcesProvider); ok {
+		creds.DeniedResources = deniedGVKsToGVRs(params.KubernetesClient, drp.GetDeniedResources())
+	}
+
+	return creds
+}
+
+// deniedGVKsToGVRs converts denied GroupVersionKinds to GroupVersionResources
+// using the REST mapper from the Kubernetes client.
+func deniedGVKsToGVRs(k api.KubernetesClient, gvks []api.GroupVersionKind) []sandboxcfg.DeniedGVR {
+	if len(gvks) == 0 {
+		return nil
+	}
+	mapper := k.RESTMapper()
+	var denied []sandboxcfg.DeniedGVR
+	for _, gvk := range gvks {
+		if gvk.Kind == "" {
+			// Group+Version denied entirely — pass through without kind→resource mapping
+			denied = append(denied, sandboxcfg.DeniedGVR{
+				Group:   gvk.Group,
+				Version: gvk.Version,
+			})
+			continue
+		}
+		mapping, err := mapper.RESTMapping(schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind}, gvk.Version)
+		if err != nil {
+			klog.V(4).Infof("Could not map denied resource %s/%s/%s to GVR: %v", gvk.Group, gvk.Version, gvk.Kind, err)
+			continue
+		}
+		denied = append(denied, sandboxcfg.DeniedGVR{
+			Group:    mapping.Resource.Group,
+			Version:  mapping.Resource.Version,
+			Resource: mapping.Resource.Resource,
+		})
+	}
+	return denied
 }
